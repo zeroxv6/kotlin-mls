@@ -1,0 +1,41 @@
+[Error]
+enum MlsError {
+    "Generic",
+    "GroupNotFound",
+    "CryptoError",
+    "IoError",
+    "SerializationError"
+};
+
+namespace openmls {
+    interface MlsClient {
+        constructor(string storage_path);
+
+        [Throws=MlsError]
+        string create_identity(string name);
+
+        [Throws=MlsError]
+        string create_group(string group_id);
+
+        [Throws=MlsError]
+        string add_member(string group_id, string new_member_key_package_hex);
+
+        [Throws=MlsError]
+        string process_welcome(string welcome_hex);
+
+        [Throws=MlsError]
+        void process_commit(string group_id, string commit_hex);
+
+        [Throws=MlsError]
+        string encrypt_message(string group_id, string plaintext);
+
+        [Throws=MlsError]
+        string decrypt_message(string group_id, string ciphertext_hex);
+
+        [Throws=MlsError]
+        void save_state();
+
+        [Throws=MlsError]
+        void load_state();
+    };
+};

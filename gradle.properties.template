@@ -1,0 +1,10 @@
+# Maven Central credentials (DO NOT commit this file with real values!)
+# Copy this to gradle.properties and fill in your actual credentials
+
+ossrhUsername=YOUR_SONATYPE_USERNAME
+ossrhPassword=YOUR_SONATYPE_PASSWORD
+
+# GPG signing (for signing artifacts)
+signing.keyId=YOUR_KEY_ID
+signing.password=YOUR_KEY_PASSWORD
+signing.secretKeyRingFile=/path/to/secring.gpg

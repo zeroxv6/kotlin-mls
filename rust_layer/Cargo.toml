@@ -1,0 +1,41 @@
+[package]
+name = "android_openmls"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+name = "android_openmls"
+
+[dependencies]
+# Core MLS Implementation
+openmls = "0.8"
+openmls_rust_crypto = "0.5"
+openmls_basic_credential = "0.5"
+
+# UniFFI - The bridge to Kotlin/Java
+uniffi = { version = "=0.27.1", features = ["cli"] }
+uniffi_bindgen = "0.27.1"
+
+# Serialization - for state persistence
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+bincode = "1.3"  # For binary serialization of MlsGroup
+
+# Utilities
+hex = "0.4"           # For hex encoding/decoding
+thiserror = "1.0"     # For error handling
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi_bindgen.rs"
+
+[build-dependencies]
+# No build dependencies needed for proc-macro-only UniFFI
+
+[profile.release]
+# Optimize for size on Android
+opt-level = "z"       # Optimize for size
+lto = true            # Enable Link Time Optimization
+codegen-units = 1     # Better optimization
+strip = true          # Strip symbols
