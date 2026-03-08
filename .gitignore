@@ -89,6 +89,7 @@ rust_layer/Cargo.lock
 
 # Publishing credentials - NEVER COMMIT!
 gradle.properties
+gradle.properties.template
 *.gpg
 *.asc
 

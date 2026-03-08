@@ -4,38 +4,69 @@ enum MlsError {
     "GroupNotFound",
     "CryptoError",
     "IoError",
-    "SerializationError"
+    "SerializationError",
+    "IdentityNotInitialized"
 };
 
-namespace openmls {
-    interface MlsClient {
-        constructor(string storage_path);
+dictionary MemberInfo {
+    u32 index;
+    sequence<u8> identity;
+};
 
-        [Throws=MlsError]
-        string create_identity(string name);
+interface MlsClient {
+    constructor(string storage_path);
 
-        [Throws=MlsError]
-        string create_group(string group_id);
+    // Identity
+    [Throws=MlsError]
+    string create_identity(string name);
 
-        [Throws=MlsError]
-        string add_member(string group_id, string new_member_key_package_hex);
+    [Throws=MlsError]
+    string generate_key_package();
 
-        [Throws=MlsError]
-        string process_welcome(string welcome_hex);
+    boolean has_identity();
 
-        [Throws=MlsError]
-        void process_commit(string group_id, string commit_hex);
+    // Group lifecycle
+    [Throws=MlsError]
+    string create_group(string group_id);
 
-        [Throws=MlsError]
-        string encrypt_message(string group_id, string plaintext);
+    [Throws=MlsError]
+    string add_member(string group_id, string new_member_key_package_hex);
 
-        [Throws=MlsError]
-        string decrypt_message(string group_id, string ciphertext_hex);
+    [Throws=MlsError]
+    string remove_member(string group_id, u32 member_index);
 
-        [Throws=MlsError]
-        void save_state();
+    [Throws=MlsError]
+    string self_update(string group_id);
 
-        [Throws=MlsError]
-        void load_state();
-    };
+    [Throws=MlsError]
+    string process_welcome(string welcome_hex);
+
+    [Throws=MlsError]
+    void process_commit(string group_id, string commit_hex);
+
+    // Messaging
+    [Throws=MlsError]
+    string encrypt_message(string group_id, string plaintext);
+
+    [Throws=MlsError]
+    string decrypt_message(string group_id, string ciphertext_hex);
+
+    // Queries
+    sequence<string> list_active_groups();
+
+    [Throws=MlsError]
+    string get_group_info(string group_id);
+
+    [Throws=MlsError]
+    sequence<MemberInfo> get_members(string group_id);
+
+    // Persistence
+    [Throws=MlsError]
+    void save_state();
+
+    [Throws=MlsError]
+    void load_state();
+
+    [Throws=MlsError]
+    sequence<string> list_saved_groups();
 };

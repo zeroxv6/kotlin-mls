@@ -119,11 +119,11 @@ mavenPublishing {
     publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.CENTRAL_PORTAL)
     signAllPublications()
     
-    coordinates("space.zeroxv6", "kotlin-mls", "1.0.1")
+    coordinates("space.zeroxv6", "kotlin-mls", "1.1.0")
     
     pom {
         name.set("Kotlin MLS")
-        description.set("Messaging Layer Security (MLS) library for Android using OpenMLS")
+        description.set("A Kotlin wrapper for the OpenMLS Rust, generated via UniFFI. This library provides a high-performance, memory-safe implementation of the Messaging Layer Security (MLS) protocol for secure group messaging in Android applications.")
         url.set("https://github.com/zeroxv6/kotlin-mls")
         
         licenses {

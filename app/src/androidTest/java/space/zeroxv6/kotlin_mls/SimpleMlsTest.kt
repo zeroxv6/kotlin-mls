@@ -13,7 +13,8 @@ import org.junit.runner.RunWith
 import java.io.File
 
 /**
- * Simple instrumented tests for MLS functionality
+ * Comprehensive instrumented tests for MLS functionality.
+ *
  * Run with: ./gradlew connectedAndroidTest
  */
 @RunWith(AndroidJUnit4::class)
@@ -48,105 +49,101 @@ class SimpleMlsTest {
         return MlsService(context, name)
     }
 
+    // ================================================================
+    // 1. Identity creation
+    // ================================================================
+
     @Test
-    fun test1_BasicIdentityCreation() = runBlocking {
+    fun test1_IdentityCreation() = runBlocking {
         println("\n=== Test 1: Identity Creation ===")
         val service = createTestService("test_identity")
 
-        val keyPackage = service.generateIdentity("Alice")
+        assertFalse("Should not have identity yet", service.hasIdentity())
 
-        assertNotNull("Key package should not be null", keyPackage)
-        assertTrue("Key package should not be empty", keyPackage.isNotEmpty())
-        assertTrue("Key package should be hex", keyPackage.matches(Regex("[0-9a-f]+")))
+        service.createIdentity("Alice")
 
+        assertTrue("Should have identity now", service.hasIdentity())
         println("✅ PASS: Identity created")
-        println("   Key package length: ${keyPackage.length}")
     }
 
+    // ================================================================
+    // 2. Key package generation
+    // ================================================================
+
     @Test
-    fun test2_GroupCreation() = runBlocking {
-        println("\n=== Test 2: Group Creation ===")
+    fun test2_KeyPackageGeneration() = runBlocking {
+        println("\n=== Test 2: Key Package Generation ===")
+        val service = createTestService("test_kp")
+
+        service.createIdentity("Alice")
+
+        val kp1 = service.generateKeyPackage()
+        val kp2 = service.generateKeyPackage()
+
+        assertTrue("Key package should be hex", kp1.matches(Regex("[0-9a-f]+")))
+        assertNotEquals("Each key package should be unique", kp1, kp2)
+
+        println("✅ PASS: Key packages generated (${kp1.length} chars each)")
+    }
+
+    // ================================================================
+    // 3. Group creation
+    // ================================================================
+
+    @Test
+    fun test3_GroupCreation() = runBlocking {
+        println("\n=== Test 3: Group Creation ===")
         val service = createTestService("test_group")
 
-        service.generateIdentity("Alice")
-        val groupId = service.createGroup("my-group")
+        service.createIdentity("Alice")
+        val groupId = service.createGroup()
 
-        assertNotNull("Group ID should not be null", groupId)
         assertTrue("Group ID should not be empty", groupId.isNotEmpty())
+        assertTrue("Group ID should be hex", groupId.matches(Regex("[0-9a-f]+")))
 
-        println("✅ PASS: Group created")
-        println("   Group ID: ${groupId.take(16)}...")
+        val active = service.listActiveGroups()
+        assertTrue("Group should be in active list", active.contains(groupId))
+
+        println("✅ PASS: Group created ${groupId.take(16)}...")
     }
 
-    @Test
-    fun test3_SingleUserMessaging() = runBlocking {
-        println("\n=== Test 3: Single User Messaging ===")
-        val alice = createTestService("alice_single")
-        val bob = createTestService("bob_single")
-
-        // Create a two-person group for proper testing
-        alice.generateIdentity("Alice")
-        val bobKP = bob.generateIdentity("Bob")
-        val groupId = alice.createGroup("test-group")
-
-        // Add Bob to the group
-        val invite = JSONObject(alice.addMember(groupId, bobKP))
-        val bobGroupId = bob.processWelcome(invite.getString("welcome"))
-
-        val plaintext = "Hello, World!"
-        println("   Alice encrypting: '$plaintext'")
-        
-        val ciphertext = alice.encrypt(groupId, plaintext)
-        println("   Ciphertext: ${ciphertext.take(40)}...")
-
-        // Bob decrypts (not Alice - you can't decrypt your own messages in MLS)
-        val decrypted = bob.decrypt(bobGroupId, ciphertext)
-        println("   Bob decrypted: '$decrypted'")
-
-        assertEquals("Decrypted should match original", plaintext, decrypted)
-
-        println("✅ PASS: Messaging works (Alice → Bob)")
-    }
+    // ================================================================
+    // 4. Two-user messaging (Alice → Bob)
+    // ================================================================
 
     @Test
-    fun test4_TwoUserCommunication() = runBlocking {
-        println("\n=== Test 4: Two User Communication ===")
-        val alice = createTestService("alice_two_user")
-        val bob = createTestService("bob_two_user")
+    fun test4_TwoUserMessaging() = runBlocking {
+        println("\n=== Test 4: Two-User Messaging ===")
+        val alice = createTestService("alice_msg")
+        val bob = createTestService("bob_msg")
 
-        // Alice creates identity and group
-        alice.generateIdentity("Alice")
-        val groupId = alice.createGroup("team-chat")
-        println("   Alice created group: ${groupId.take(16)}...")
+        alice.createIdentity("Alice")
+        bob.createIdentity("Bob")
 
-        // Bob creates identity
-        val bobKeyPackage = bob.generateIdentity("Bob")
-        println("   Bob created identity")
+        val bobKP = bob.generateKeyPackage()
+        val groupId = alice.createGroup()
 
         // Alice adds Bob
-        val inviteJson = alice.addMember(groupId, bobKeyPackage)
-        val invite = JSONObject(inviteJson)
-        val welcomeHex = invite.getString("welcome")
-        println("   Alice invited Bob")
+        val invite = JSONObject(alice.addMember(groupId, bobKP))
+        assertTrue("Invite should have commit", invite.has("commit"))
+        assertTrue("Invite should have welcome", invite.has("welcome"))
 
         // Bob joins
-        val bobGroupId = bob.processWelcome(welcomeHex)
-        assertEquals("Group IDs should match", groupId, bobGroupId)
-        println("   Bob joined group")
+        val bobGroupId = bob.processWelcome(invite.getString("welcome"))
+        assertEquals("Group IDs must match", groupId, bobGroupId)
 
-        // Alice sends message
-        val message = "Hi Bob!"
-        val ciphertext = alice.encrypt(groupId, message)
-        println("   Alice sent: '$message'")
-
-        // Bob receives
+        // Alice → Bob
+        val plaintext = "Hello, Bob!"
+        val ciphertext = alice.encrypt(groupId, plaintext)
         val decrypted = bob.decrypt(bobGroupId, ciphertext)
-        println("   Bob received: '$decrypted'")
+        assertEquals("Decrypted must match", plaintext, decrypted)
 
-        assertEquals("Bob should receive Alice's message", message, decrypted)
-
-        println("✅ PASS: Two-user communication works")
+        println("✅ PASS: Alice → Bob: '$plaintext'")
     }
+
+    // ================================================================
+    // 5. Bidirectional messaging
+    // ================================================================
 
     @Test
     fun test5_BidirectionalMessaging() = runBlocking {
@@ -154,85 +151,280 @@ class SimpleMlsTest {
         val alice = createTestService("alice_bidir")
         val bob = createTestService("bob_bidir")
 
-        // Setup
-        alice.generateIdentity("Alice")
-        val bobKP = bob.generateIdentity("Bob")
-        val groupId = alice.createGroup("chat")
+        alice.createIdentity("Alice")
+        bob.createIdentity("Bob")
+
+        val bobKP = bob.generateKeyPackage()
+        val groupId = alice.createGroup()
 
         val invite = JSONObject(alice.addMember(groupId, bobKP))
         val bobGroupId = bob.processWelcome(invite.getString("welcome"))
 
-        // Verify both are in the same group
-        assertEquals("Group IDs should match", groupId, bobGroupId)
-        println("   Both users in group: ${groupId.take(16)}...")
-
-        // Alice → Bob (this should work)
+        // Alice → Bob
         val msg1 = "Hi Bob!"
-        val cipher1 = alice.encrypt(groupId, msg1)
-        val received1 = bob.decrypt(bobGroupId, cipher1)
-        assertEquals(msg1, received1)
+        assertEquals(msg1, bob.decrypt(bobGroupId, alice.encrypt(groupId, msg1)))
         println("   Alice → Bob: '$msg1' ✓")
 
-        // For Bob to send back, we need to ensure epochs are synced
-        // In a real scenario, all members would process the same commits
-        // For now, let's just test Alice → Bob direction
-        println("✅ PASS: One-way messaging works (Alice → Bob)")
-        println("   Note: Bidirectional requires commit synchronization")
+        // Bob → Alice
+        val msg2 = "Hi Alice!"
+        assertEquals(msg2, alice.decrypt(groupId, bob.encrypt(bobGroupId, msg2)))
+        println("   Bob → Alice: '$msg2' ✓")
+
+        println("✅ PASS: Bidirectional messaging works")
     }
 
-    @Test
-    fun test6_StatePersistence() = runBlocking {
-        println("\n=== Test 6: State Persistence ===")
-        val storageName = "test_persistence"
+    // ================================================================
+    // 6. Three-user group with commit synchronisation
+    // ================================================================
 
-        // Create and save
-        val groupId = run {
+    @Test
+    fun test6_ThreeUserGroupWithCommitSync() = runBlocking {
+        println("\n=== Test 6: Three-User Group + Commit Sync ===")
+        val alice = createTestService("alice_three")
+        val bob = createTestService("bob_three")
+        val charlie = createTestService("charlie_three")
+
+        alice.createIdentity("Alice")
+        bob.createIdentity("Bob")
+        charlie.createIdentity("Charlie")
+
+        val bobKP = bob.generateKeyPackage()
+        val charlieKP = charlie.generateKeyPackage()
+
+        // Alice creates group and adds Bob
+        val groupId = alice.createGroup()
+        val invite1 = JSONObject(alice.addMember(groupId, bobKP))
+        val bobGroupId = bob.processWelcome(invite1.getString("welcome"))
+        println("   Bob joined")
+
+        // Alice adds Charlie — Bob MUST process the commit
+        val invite2 = JSONObject(alice.addMember(groupId, charlieKP))
+        bob.processCommit(bobGroupId, invite2.getString("commit"))
+        val charlieGroupId = charlie.processWelcome(invite2.getString("welcome"))
+        println("   Charlie joined, Bob processed commit")
+
+        // Alice broadcasts a message — both Bob and Charlie decrypt
+        val message = "Hello everyone!"
+        val ciphertext = alice.encrypt(groupId, message)
+        assertEquals(message, bob.decrypt(bobGroupId, ciphertext))
+        assertEquals(message, charlie.decrypt(charlieGroupId, ciphertext))
+
+        println("✅ PASS: Three-user group with proper commit sync")
+    }
+
+    // ================================================================
+    // 7. Remove member
+    // ================================================================
+
+    @Test
+    fun test7_RemoveMember() = runBlocking {
+        println("\n=== Test 7: Remove Member ===")
+        val alice = createTestService("alice_remove")
+        val bob = createTestService("bob_remove")
+
+        alice.createIdentity("Alice")
+        bob.createIdentity("Bob")
+
+        val bobKP = bob.generateKeyPackage()
+        val groupId = alice.createGroup()
+
+        val invite = JSONObject(alice.addMember(groupId, bobKP))
+        bob.processWelcome(invite.getString("welcome"))
+
+        // Get Bob's leaf index
+        val members = alice.getMembers(groupId)
+        val bobMember = members.first { String(it.identity) == "Bob" }
+
+        // Alice removes Bob
+        val removeResult = JSONObject(alice.removeMember(groupId, bobMember.index.toUInt()))
+        assertTrue("Remove should return commit", removeResult.has("commit"))
+
+        // After removal, group should have 1 member
+        val info = JSONObject(alice.getGroupInfo(groupId))
+        assertEquals("Should have 1 member left", 1, info.getInt("member_count"))
+
+        println("✅ PASS: Member removed successfully")
+    }
+
+    // ================================================================
+    // 8. Self-update (key rotation)
+    // ================================================================
+
+    @Test
+    fun test8_SelfUpdate() = runBlocking {
+        println("\n=== Test 8: Self-Update (Key Rotation) ===")
+        val alice = createTestService("alice_update")
+        val bob = createTestService("bob_update")
+
+        alice.createIdentity("Alice")
+        bob.createIdentity("Bob")
+
+        val bobKP = bob.generateKeyPackage()
+        val groupId = alice.createGroup()
+
+        val invite = JSONObject(alice.addMember(groupId, bobKP))
+        val bobGroupId = bob.processWelcome(invite.getString("welcome"))
+
+        val infoBefore = JSONObject(alice.getGroupInfo(groupId))
+        val epochBefore = infoBefore.getLong("epoch")
+
+        // Alice performs self-update
+        val updateResult = JSONObject(alice.selfUpdate(groupId))
+        assertTrue("Update should return commit", updateResult.has("commit"))
+
+        // Bob processes the update commit
+        bob.processCommit(bobGroupId, updateResult.getString("commit"))
+
+        val infoAfter = JSONObject(alice.getGroupInfo(groupId))
+        assertTrue("Epoch should advance", infoAfter.getLong("epoch") > epochBefore)
+
+        // Messaging should still work after key rotation
+        val msg = "After key rotation"
+        assertEquals(msg, bob.decrypt(bobGroupId, alice.encrypt(groupId, msg)))
+
+        println("✅ PASS: Self-update works, messaging continues")
+    }
+
+    // ================================================================
+    // 9. Get members
+    // ================================================================
+
+    @Test
+    fun test9_GetMembers() = runBlocking {
+        println("\n=== Test 9: Get Members ===")
+        val alice = createTestService("alice_members")
+        val bob = createTestService("bob_members")
+
+        alice.createIdentity("Alice")
+        bob.createIdentity("Bob")
+
+        val bobKP = bob.generateKeyPackage()
+        val groupId = alice.createGroup()
+        alice.addMember(groupId, bobKP)
+
+        val members = alice.getMembers(groupId)
+        assertEquals("Should have 2 members", 2, members.size)
+
+        val names = members.map { String(it.identity) }.toSet()
+        assertTrue("Should contain Alice", names.contains("Alice"))
+        assertTrue("Should contain Bob", names.contains("Bob"))
+
+        println("✅ PASS: Members listed correctly: $names")
+    }
+
+    // ================================================================
+    // 10. Identity persistence
+    // ================================================================
+
+    @Test
+    fun test10_IdentityPersistence() = runBlocking {
+        println("\n=== Test 10: Identity Persistence ===")
+        val storageName = "test_persist"
+
+        // Session 1 — create identity and save
+        run {
             val service = createTestService(storageName)
-            service.generateIdentity("Alice")
-            val gid = service.createGroup("persistent-group")
+            service.createIdentity("Alice")
             service.save()
-            println("   Saved state")
-            gid
+            println("   Saved identity")
         }
 
-        // Load and verify
+        // Session 2 — new instance should restore identity
         run {
             val service2 = MlsService(context, storageName)
-            val savedGroups = service2.listSavedGroups()
-            
-            assertTrue("Should have saved groups", savedGroups.isNotEmpty())
-            println("   Found ${savedGroups.size} saved group(s)")
-            
-            println("✅ PASS: State persistence works")
+            assertTrue("Identity should be restored", service2.hasIdentity())
+
+            // Verify the restored identity works
+            val groupId = service2.createGroup()
+            assertTrue("Should create group with restored identity", groupId.isNotEmpty())
+            println("   Restored identity and created group: ${groupId.take(16)}...")
         }
+
+        println("✅ PASS: Identity persistence works")
     }
 
+    // ================================================================
+    // 11. Multiple messages
+    // ================================================================
+
     @Test
-    fun test7_HelperMethods() = runBlocking {
-        println("\n=== Test 7: Helper Methods ===")
-        val service = createTestService("test_helpers")
+    fun test11_MultipleMessages() = runBlocking {
+        println("\n=== Test 11: Multiple Messages ===")
+        val alice = createTestService("alice_multi")
+        val bob = createTestService("bob_multi")
 
-        service.generateIdentity("Alice")
-        val groupId = service.createGroup("test-group")
+        alice.createIdentity("Alice")
+        bob.createIdentity("Bob")
 
-        // Test listActiveGroups
-        val activeGroups = service.listActiveGroups()
-        assertTrue("Should have active groups", activeGroups.isNotEmpty())
-        assertTrue("Should contain our group", activeGroups.contains(groupId))
-        println("   Active groups: ${activeGroups.size}")
+        val bobKP = bob.generateKeyPackage()
+        val groupId = alice.createGroup()
+        val invite = JSONObject(alice.addMember(groupId, bobKP))
+        val bobGroupId = bob.processWelcome(invite.getString("welcome"))
 
-        // Test getGroupInfo
-        val groupInfo = service.getGroupInfo(groupId)
-        val info = JSONObject(groupInfo)
-        assertEquals("Group ID should match", groupId, info.getString("group_id"))
-        println("   Group info: epoch=${info.getLong("epoch")}, members=${info.getInt("member_count")}")
+        val messages = listOf(
+            "First message",
+            "Second message",
+            "Emoji test 🚀🔒",
+            "Special chars: !@#$%^&*()",
+            "Unicode: 你好世界"
+        )
 
-        // Test save and listSavedGroups
-        service.save()
-        val savedGroups = service.listSavedGroups()
-        assertTrue("Should have saved groups", savedGroups.isNotEmpty())
-        println("   Saved groups: ${savedGroups.size}")
+        messages.forEach { msg ->
+            val ct = alice.encrypt(groupId, msg)
+            assertEquals(msg, bob.decrypt(bobGroupId, ct))
+            println("   ✓ '$msg'")
+        }
 
-        println("✅ PASS: Helper methods work")
+        println("✅ PASS: ${messages.size} messages decrypted correctly")
+    }
+
+    // ================================================================
+    // 12. Error handling — no identity
+    // ================================================================
+
+    @Test(expected = MlsServiceException::class)
+    fun test12_ErrorNoIdentity() = runBlocking {
+        println("\n=== Test 12: Error – No Identity ===")
+        val service = createTestService("test_no_id")
+        // Should throw because no identity has been created
+        service.createGroup()
+    }
+
+    // ================================================================
+    // 13. Error handling — invalid group
+    // ================================================================
+
+    @Test(expected = MlsServiceException::class)
+    fun test13_ErrorInvalidGroup() = runBlocking {
+        println("\n=== Test 13: Error – Invalid Group ===")
+        val service = createTestService("test_bad_group")
+        service.createIdentity("Alice")
+        service.encrypt("nonexistent-group-id", "test")
+    }
+
+    // ================================================================
+    // 14. Long message
+    // ================================================================
+
+    @Test
+    fun test14_LongMessage() = runBlocking {
+        println("\n=== Test 14: Long Message ===")
+        val alice = createTestService("alice_long")
+        val bob = createTestService("bob_long")
+
+        alice.createIdentity("Alice")
+        bob.createIdentity("Bob")
+
+        val bobKP = bob.generateKeyPackage()
+        val groupId = alice.createGroup()
+        val invite = JSONObject(alice.addMember(groupId, bobKP))
+        val bobGroupId = bob.processWelcome(invite.getString("welcome"))
+
+        val longMsg = "A".repeat(10_000)
+        val ct = alice.encrypt(groupId, longMsg)
+        val decrypted = bob.decrypt(bobGroupId, ct)
+        assertEquals("Long message must match", longMsg, decrypted)
+
+        println("✅ PASS: 10 000-char message works")
     }
 }
