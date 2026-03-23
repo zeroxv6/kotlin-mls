@@ -18,7 +18,7 @@ Add to your `build.gradle.kts`:
 
 ```kotlin
 dependencies {
-    implementation("space.zeroxv6:kotlin-mls:1.0.1")
+    implementation("space.zeroxv6:kotlin-mls:1.1.0")
 }
 ```
 
@@ -67,6 +67,11 @@ val plaintext = mlsService.receiveMessage(groupId, ciphertext)
 - **Rust Layer**: Core MLS implementation using OpenMLS
 - **UniFFI**: Automatic Kotlin bindings generation
 - **Android Library**: Kotlin wrapper with Android-friendly API
+
+## Security Warning 
+
+This library has not undergone a formal security audit. While care has been taken to implement the MLS protocol correctly and securely, it may contain undiscovered vulnerabilities. If you plan to use this library in a production or security-critical context, proceed with caution and consider conducting an independent security review.
+
 
 ## License
 
